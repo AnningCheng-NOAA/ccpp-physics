@@ -2422,7 +2422,8 @@ subroutine micro_mg_tend (                                       &
               vap_dep(i,k) = dum - mnuccd(i,k)
            end if
         end if
-
+       ! Anning Cheng, limiting vap_dep, 04/7/2020
+       if(vap_dep(i,k)>2.e-6) vap_dep(i,k)=2.e-6
      end do
 
      do i=1,mgncol
