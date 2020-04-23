@@ -394,7 +394,7 @@ subroutine micro_mg_init(                                         &
   rhosu = 85000._r8 / (rair * tmelt)
 
   ! Maximum temperature at which snow is allowed to exist
-  snowmelt = tmelt + two
+  snowmelt = tmelt + two + half
   ! Minimum temperature at which rain is allowed to exist
   rainfrze = tmelt - forty
 
