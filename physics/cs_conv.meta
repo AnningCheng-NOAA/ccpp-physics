@@ -220,7 +220,7 @@
   standard_name = convective_updraft_area_fraction_at_model_interfaces
   long_name = convective updraft area fraction at model interfaces
   units = frac
-  dimensions = (horizontal_dimension,vertical_dimension)
+  dimensions = (horizontal_dimension,vertical_dimension_plus_one)
   type = real
   kind = kind_phys
   intent = in
@@ -583,6 +583,24 @@
   units = flag
   dimensions = ()
   type = logical
+  intent = in
+  optional = F
+[c0s_deep]
+  standard_name = rain_conversion_parameter_deep_convection
+  long_name = convective rain conversion parameter for deep conv.
+  units = m-1
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = F
+[c1_deep]
+  standard_name = detrainment_conversion_parameter_deep_convection
+  long_name = convective detrainment conversion parameter for deep conv.
+  units = m-1
+  dimensions = ()
+  type = real
+  kind = kind_phys
   intent = in
   optional = F
 [lprnt]
