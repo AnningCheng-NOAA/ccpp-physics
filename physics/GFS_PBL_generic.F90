@@ -84,6 +84,7 @@
         ntwa, ntia, ntgl, ntoz, ntke, ntkev, trans_aero, ntchs, ntchm,                   &
         imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6,           &
         imp_physics_zhao_carr, imp_physics_mg, cplchm, ltaerosol, hybedmf, do_shoc,      &
+        hffac, islmsk, zorl, sigmaf, zvfun, hflx, lheatstrg, h0facu, h0facs,             &
         satmedmf, qgrs, vdftra, errmsg, errflg)
 
       use machine,                only : kind_phys
@@ -94,10 +95,15 @@
       integer, intent(in) :: im, levs, nvdiff, ntrac
       integer, intent(in) :: ntqv, ntcw, ntiw, ntrw, ntsw, ntlnc, ntinc, ntrnc, ntsnc, ntgnc
       integer, intent(in) :: ntwa, ntia, ntgl, ntoz, ntke, ntkev, ntchs, ntchm
-      logical, intent(in) :: trans_aero
+      logical, intent(in) :: trans_aero, lheatstrg
       integer, intent(in) :: imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6
       integer, intent(in) :: imp_physics_zhao_carr, imp_physics_mg
       logical, intent(in) :: cplchm, ltaerosol, hybedmf, do_shoc, satmedmf
+      real(kind=kind_phys), dimension(im), intent(in)  :: sigmaf, zorl
+      real(kind=kind_phys), dimension(im), intent(inout)  :: hflx, hffac, zvfun
+      integer, dimension(im), intent(in) :: islmsk
+      real(kind=kind_phys), intent(in)  :: h0facu, h0facs
+
 
       real(kind=kind_phys), dimension(im, levs, ntrac), intent(in) :: qgrs
       real(kind=kind_phys), dimension(im, levs, nvdiff), intent(inout) :: vdftra
@@ -107,6 +113,9 @@
 
       !local variables
       integer :: i, k, kk, k1, n
+      real (kind=kind_phys), parameter :: z0min=0.1, z0max=1.0
+      real(kind=kind_phys) :: tem, tem1, tem2
+
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -243,6 +252,41 @@
         endif
 !
       endif
+!  --- ...  Boundary Layer and Free atmospheic turbulence parameterization
+!
+!  in order to achieve heat storage within canopy layer, in the canopy heat
+!    storage parameterization the kinematic sensible and latent heat fluxes
+!    (hflx & evap) as surface boundary forcings to the pbl scheme are
+!    reduced as a function of surface roughness
+!
+      do i=1,im
+        hffac(i) = 1.0
+      enddo
+      do i=1,im
+        if(islmsk(i) == 1) then
+          tem = 0.01 * zorl(i)     ! change unit from cm to m
+          tem1 = (tem - z0min) / (z0max - z0min)
+          tem1 = min(max(tem1, 0.0), 1.0)
+          tem2 = max(sigmaf(i), 0.1)
+!         tem2 = sigmaf(i)
+          zvfun(i) = sqrt(tem1 * tem2)
+        else
+          zvfun(i) = 0.
+        endif
+      enddo
+      if (lheatstrg) then
+        do i=1,im
+         if(islmsk(i) == 1) then
+           if(hflx(i) > 0.) then
+             hffac(i) = h0facu * zvfun(i)
+           else
+             hffac(i) = h0facs * zvfun(i)
+           endif
+           hffac(i) = 1. + hffac(i)
+           hflx(i) = hflx(i) / hffac(i)
+         end if
+       enddo
+     endif
 
     end subroutine GFS_PBL_generic_pre_run
 
@@ -268,7 +312,7 @@
         imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6, imp_physics_zhao_carr, imp_physics_mg,          &
         ltaerosol, cplflx, cplchm, lssav, ldiag3d, lsidea, hybedmf, do_shoc, satmedmf, shinhong, do_ysu,                       &
         dvdftra, dusfc1, dvsfc1, dtsfc1, dqsfc1, dtf, dudt, dvdt, dtdt, htrsw, htrlw, xmu,                                     &
-        dqdt, dusfc_cpl, dvsfc_cpl, dtsfc_cpl,                                                                                 &
+        dqdt, dusfc_cpl, dvsfc_cpl, dtsfc_cpl, hffac,                                                                          &
         dqsfc_cpl, dusfci_cpl, dvsfci_cpl, dtsfci_cpl, dqsfci_cpl, dusfc_diag, dvsfc_diag, dtsfc_diag, dqsfc_diag,             &
         dusfci_diag, dvsfci_diag, dtsfci_diag, dqsfci_diag, dt3dt, du3dt_PBL, du3dt_OGWD, dv3dt_PBL, dv3dt_OGWD, dq3dt,        &
         dq3dt_ozone, rd, cp,fvirt, hvap, t1, q1, prsl, hflx, ushfsfci, oceanfrac, fice, dusfc_cice, dvsfc_cice, dtsfc_cice,    &
@@ -294,7 +338,7 @@
       real(kind=kind_phys), dimension(:), intent(in) :: dusfc_cice, dvsfc_cice, dtsfc_cice, dqsfc_cice, &
           wind, stress_ocn, hflx_ocn, evap_ocn, ugrs1, vgrs1
       real(kind=kind_phys), dimension(im, levs, nvdiff), intent(in) :: dvdftra
-      real(kind=kind_phys), dimension(im), intent(in) :: dusfc1, dvsfc1, dtsfc1, dqsfc1, xmu
+      real(kind=kind_phys), dimension(im), intent(in) :: dusfc1, dvsfc1, dtsfc1, dqsfc1, xmu, hffac
       real(kind=kind_phys), dimension(im, levs), intent(in) :: dudt, dvdt, dtdt, htrsw, htrlw
 
       real(kind=kind_phys), dimension(im, levs, ntrac), intent(inout) :: dqdt
@@ -492,7 +536,7 @@
               else                                                    ! use results from PBL scheme for 100% open ocean
                 dusfci_cpl(i) = dusfc1(i)
                 dvsfci_cpl(i) = dvsfc1(i)
-                dtsfci_cpl(i) = dtsfc1(i)
+                dtsfci_cpl(i) = dtsfc1(i) * hffac(i)
                 dqsfci_cpl(i) = dqsfc1(i)
               endif
             endif
@@ -511,11 +555,11 @@
         do i=1,im
           dusfc_diag (i) = dusfc_diag(i) + dusfc1(i)*dtf
           dvsfc_diag (i) = dvsfc_diag(i) + dvsfc1(i)*dtf
-          dtsfc_diag (i) = dtsfc_diag(i) + dtsfc1(i)*dtf
+          dtsfc_diag (i) = dtsfc_diag(i) + dtsfc1(i)*hffac(i)*dtf
           dqsfc_diag (i) = dqsfc_diag(i) + dqsfc1(i)*dtf
           dusfci_diag(i) = dusfc1(i)
           dvsfci_diag(i) = dvsfc1(i)
-          dtsfci_diag(i) = dtsfc1(i)
+          dtsfci_diag(i) = dtsfc1(i)*hffac(i)
           dqsfci_diag(i) = dqsfc1(i)
         enddo
   !       if (lprnt) then

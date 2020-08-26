@@ -130,6 +130,65 @@
   kind = kind_phys
   intent = in
   optional = F
+[deep_pblf]
+  standard_name = flag_for_PBL_forcing_in_DPCNV
+  long_name = flag for having PBL forcing in deep cumulus convection
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+  optional = F
+[dtvdtp]
+  standard_name = tendency_of_virtual_temperature_two_time_steps
+  long_name =  tendency of virtual temperature between two time steps
+  units = K s-1
+  dimensions = (horizontal_dimension,vertical_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+  optional = F
+[Tbd]
+  standard_name = GFS_tbd_type_instance
+  long_name = Fortran DDT containing FV3-GFS miscellaneous data
+  units = DDT
+  dimensions = ()
+  type = GFS_tbd_type
+  intent = in
+  optional = F
+[con_fvirt]
+  standard_name = ratio_of_vapor_to_dry_air_gas_constants_minus_one
+  long_name = (rv/rd) - 1 (rv = ideal gas constant for water vapor)
+  units = none
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = F
+[numtq]
+  standard_name = time_levels_of_phy_f3d_for_PBL_forcing
+  long_name = time levels of phy_f3d for PBL forcing
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[dtp]
+  standard_name = time_step_for_physics
+  long_name = physics timestep
+  units = s
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = F
+[imp_physics]
+  standard_name = flag_for_microphysics_scheme
+  long_name = choice of microphysics scheme
+  units = flag
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP

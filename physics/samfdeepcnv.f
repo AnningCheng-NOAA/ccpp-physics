@@ -71,9 +71,9 @@
       subroutine samfdeepcnv_run (im,ix,km,itc,ntc,cliq,cp,cvap,        &
      &    eps,epsm1,fv,grav,hvap,rd,rv,                                 &
      &    t0c,delt,ntk,ntr,delp,                                        &
-     &    prslp,psp,phil,qtr,q1,t1,u1,v1,fscav,                         &
+     &    prslp,psp,phil,qtr,lpblf,dtvdt,q1,t1,u1,v1,fscav,             &
      &    do_ca,ca_deep,cldwrk,rn,kbot,ktop,kcnv,islimsk,garea,         &
-     &    dot,ncloud,ud_mf,dd_mf,dt_mf,cnvw,cnvc,                       &
+     &    dot,ncloud,hpbl,ud_mf,dd_mf,dt_mf,cnvw,cnvc,                  &
      &    QLCN, QICN, w_upi, cf_upi, CNV_MFD,                           &
      &    CNV_DQLDT,CLCN,CNV_FICE,CNV_NDROP,CNV_NICE,mp_phys,mp_phys_mg,&
      &    clam,c0s,c1,betal,betas,evfact,evfactl,pgcon,asolfac,         &
@@ -90,16 +90,16 @@
      &   fv, grav, hvap, rd, rv, t0c
       real(kind=kind_phys), intent(in) ::  delt
       real(kind=kind_phys), intent(in) :: psp(im), delp(ix,km),         &
-     &   prslp(ix,km),  garea(im), dot(ix,km), phil(ix,km)
+     &   prslp(ix,km), garea(im), dot(ix,km), phil(ix,km), hpbl(im)
       real(kind=kind_phys), dimension(:), intent(in) :: fscav
       real(kind=kind_phys), intent(in) :: ca_deep(ix)
-      logical, intent(in)  :: do_ca
+      logical, intent(in)  :: do_ca, lpblf
 
       integer, intent(inout)  :: kcnv(im)
       ! DH* TODO - check dimensions of qtr, ntr+2 correct?  *DH
       real(kind=kind_phys), intent(inout) ::   qtr(ix,km,ntr+2),        &
      &   q1(ix,km), t1(ix,km),   u1(ix,km), v1(ix,km),                  &
-     &   cnvw(ix,km),  cnvc(ix,km)
+     &   cnvw(ix,km),  cnvc(ix,km), dtvdt(im,km)
 
       integer, intent(out) :: kbot(im), ktop(im)
       real(kind=kind_phys), intent(out) :: cldwrk(im),                  &
@@ -183,6 +183,7 @@
 !    &                     xpwev(im),   xlamx(im),  delebar(im,ntr),
      &                     xpwev(im),   delebar(im,ntr),
      &                     delubar(im), delvbar(im)
+      real(kind=kind_phys) aapbl(im), zikb(im), zmnbl(im)
 !
       real(kind=kind_phys) c0(im)
 cj
@@ -410,7 +411,7 @@ c
 !     evfactl = 0.3
 !
       crtlame = 1.0e-4
-      crtlamd = 1.0e-4
+      crtlamd = 5.0e-5
 !
 !     cxlame  = 1.0e-3
       cxlame  = 1.0e-4
@@ -806,8 +807,8 @@ c
         do i=1,im
           if(cnvflg(i) .and. k < kmax(i)) then
 !           xlamud(i,k) = xlamx(i)
-!           xlamud(i,k) = crtlamd
-            xlamud(i,k) = 0.001 * clamt(i)
+            xlamud(i,k) = crtlamd
+!           xlamud(i,k) = 0.001 * clamt(i)
           endif
         enddo
       enddo
@@ -1137,7 +1138,7 @@ c
 !
           k = kbcon(i)
           dp = 1000. * del(i,k)
-          xmbmax(i) = dp / (2. * grav * dt2)
+          xmbmax(i) = dp / ( grav * dt2)
 !
 !         xmbmax(i) = dp / (grav * dt2)
 !
@@ -1747,6 +1748,57 @@ c
       enddo
       if(totflg) return
 !!
+!!
+!
+! compute PBL forcing based on Bechtold et al. (2014)
+!
+      if(lpblf) then
+!
+      do i = 1, im
+        sumx(i) = 0.
+        umean(i) = 0.
+        aapbl(i) = 0.
+        zikb(i) = zi(i,kb(i))
+        zmnbl(i) = min(hpbl(i), zi(i,kbcon(i)))
+      enddo
+      do k = 2, km1
+        do i = 1, im
+          if (cnvflg(i) .and. zikb(i) < hpbl(i)) then
+            if(zo(i,k) > zikb(i) .and. zo(i,k) < zmnbl(i)) then
+              aapbl(i) = aapbl(i) + dtvdt(i,k) * delp(i,k)
+              if(islimsk(i) == 0) then
+                dz = zi(i,k) - zi(i,k-1)
+                tem = sqrt(u1(i,k)*u1(i,k)+v1(i,k)*v1(i,k))
+                umean(i) = umean(i) + tem * dz
+                sumx(i) = sumx(i) + dz
+              endif
+            endif
+          endif
+        enddo
+      enddo
+      do i = 1, im
+        if(cnvflg(i)) then
+          if(aapbl(i) < 0.) aapbl(i) = 0.
+        endif
+      enddo
+      do i = 1, im
+        if(cnvflg(i) .and. islimsk(i) == 0) then
+          if(sumx(i) > 0.) then
+            umean(i) = umean(i) / sumx(i)
+            umean(i) = max(umean(i), 2.)
+            aapbl(i) = aapbl(i) * sumx(i) / umean(i)
+            if(aa1(i) <= aapbl(i)) cnvflg(i) = .false.
+          endif
+        endif
+      enddo
+!!
+      totflg = .true.
+      do i=1,im
+        totflg = totflg .and. (.not. cnvflg(i))
+      enddo
+      if(totflg) return
+!!
+      endif
 c
 c--- what would the change be, that a cloud with unit mass
 c--- will do to the environment?
@@ -2286,6 +2338,12 @@ c
           dtconv(i) = tfac * dtconv(i)
           dtconv(i) = max(dtconv(i),dtmin)
           dtconv(i) = min(dtconv(i),dtmax)
+          if(lpblf) then 
+            if(islimsk(i) /= 0) then 
+              aapbl(i) = aapbl(i) * dtconv(i)
+              if(aa1(i) <= aapbl(i)) cnvflg(i) = .false.
+            endif
+          endif
         endif
       enddo
 !
@@ -2334,7 +2392,11 @@ c
       do i= 1, im
         if(asqecflg(i)) then
 !         fld(i)=(aa1(i)-acrt(i)*acrtfct(i))/dtconv(i)
-          fld(i)=aa1(i)/dtconv(i)
+          if(lpblf) then
+            fld(i)=(aa1(i) - aapbl(i)) / dtconv(i)
+          else
+            fld(i)=aa1(i)/dtconv(i)
+          endif
           if(fld(i) <= 0.) then
             asqecflg(i) = .false.
             cnvflg(i) = .false.

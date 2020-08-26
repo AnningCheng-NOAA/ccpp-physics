@@ -86,16 +86,17 @@
         graupel0, del, rain, domr_diag, domzr_diag, domip_diag, doms_diag, tprcp, srflag, sr, cnvprcp, totprcp, totice,   &
         totsnw, totgrp, cnvprcpb, totprcpb, toticeb, totsnwb, totgrpb, dt3dt, dq3dt, rain_cpl, rainc_cpl, snow_cpl, pwat, &
         do_sppt, dtdtr, dtdtc, drain_cpl, dsnow_cpl, lsm, lsm_ruc, lsm_noahmp, raincprv, rainncprv, iceprv, snowprv,      &
-        graupelprv, draincprv, drainncprv, diceprv, dsnowprv, dgraupelprv, dtp, errmsg, errflg)
+        graupelprv, draincprv, drainncprv, diceprv, dsnowprv, dgraupelprv, dtp, Tbd, numtq, deep_pblf, errmsg, errflg)
 !
       use machine, only: kind_phys
+      use GFS_typedefs,          only: GFS_Tbd_type
 
       implicit none
 
-      integer, intent(in) :: im, ix, levs, kdt, nrcm, ncld, nncl, ntcw, ntrac
+      integer, intent(in) :: im, ix, levs, kdt, nrcm, ncld, nncl, ntcw, ntrac, numtq
       integer, intent(in) :: imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_mg
-      logical, intent(in) :: cal_pre, lssav, ldiag3d, cplflx, cplchm
-
+      logical, intent(in) :: cal_pre, lssav, ldiag3d, cplflx, cplchm, deep_pblf
+      type(GFS_tbd_type),  intent(inout)    :: Tbd
       real(kind=kind_phys),                           intent(in)    :: dtf, frain, con_g
       real(kind=kind_phys), dimension(im),            intent(in)    :: rainc, rain1, xlat, xlon, tsfc
       real(kind=kind_phys), dimension(im),            intent(inout) :: ice, snow, graupel
@@ -149,7 +150,7 @@
       integer :: i, k, ic
 
       real(kind=kind_phys), parameter :: zero = 0.0d0, one = 1.0d0
-      real(kind=kind_phys) :: crain, csnow, onebg, tem, total_precip
+      real(kind=kind_phys) :: crain, csnow, onebg, tem, total_precip, tem1, tem2
       real(kind=kind_phys), dimension(im) :: domr, domzr, domip, doms, t850, work1
 
       ! Initialize CCPP error handling variables
@@ -390,6 +391,34 @@
              dsnow_cpl(i) = rain(i) - dsnow_cpl(i)
           endif
         enddo
+      endif
+!   save temperature and moisture fields at two time steps back & & previous time step in 'phy_f3d' array
+!   for Zhao/Carr/Sundqvist Microphysics scheme, they are saved in 'phy_f3d(:,:,1~4)'
+!
+      if (deep_pblf) then
+!
+        if (imp_physics /= 99 .or. imp_physics /= 98) then   ! not zhao-carr microphysics
+           if (dtp > dtf+0.001) then  ! three time level scheme
+             do k = 1, levs
+               do i = 1, im
+                 Tbd%phy_f3d(i,k,numtq+1) = Tbd%phy_f3d(i,k,numtq+3)
+                 Tbd%phy_f3d(i,k,numtq+2) = Tbd%phy_f3d(i,k,numtq+4)
+                 Tbd%phy_f3d(i,k,numtq+3) = gt0(i,k)
+                 Tbd%phy_f3d(i,k,numtq+4) = gq0(i,k,1)
+               enddo
+             enddo
+           else  ! two time level scheme - Tbd%phy_f3d(i,k,numtq+3) & Tbd%phy_f3d(i,k,numtq+4) not used
+             do k = 1, levs
+               do i = 1, im
+                 Tbd%phy_f3d(i,k,numtq+1) = gt0(i,k)
+                 Tbd%phy_f3d(i,k,numtq+2) = gq0(i,k,1)
+                 Tbd%phy_f3d(i,k,numtq+3) = gt0(i,k)
+                 Tbd%phy_f3d(i,k,numtq+4) = gq0(i,k,1)
+               enddo
+             enddo
+           endif
+        endif
+!
       endif
 
     end subroutine GFS_MP_generic_post_run
