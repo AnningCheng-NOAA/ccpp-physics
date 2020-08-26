@@ -84,8 +84,8 @@
         ntwa, ntia, ntgl, ntoz, ntke, ntkev, nqrimef, trans_aero, ntchs, ntchm,          &
         imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6,           &
         imp_physics_zhao_carr, imp_physics_mg, imp_physics_fer_hires, cplchm, ltaerosol, &
-        hybedmf, do_shoc, satmedmf, qgrs, vdftra, lheatstrg, z0fac, e0fac, zorl,         &
-        u10m, v10m, hflx, evap, hflxq, evapq, hffac, hefac, errmsg, errflg)
+        hybedmf, do_shoc, satmedmf, qgrs, vdftra, lheatstrg, h0facu, h0facs, zorl,zvfun,   &
+        u10m, v10m, hflx, evap, hflxq, evapq, hffac, hefac, sigmaf, islmsk, errmsg, errflg)
 
       use machine,                only : kind_phys
       use GFS_PBL_generic_common, only : set_aerosol_tracer_index
@@ -102,13 +102,14 @@
 
       real(kind=kind_phys), dimension(im, levs, ntrac),  intent(in)    :: qgrs
       real(kind=kind_phys), dimension(im, levs, nvdiff), intent(inout) :: vdftra
+      integer, dimension(im), intent(in) :: islmsk
 
       ! For canopy heat storage
       logical, intent(in) :: lheatstrg
-      real(kind=kind_phys), intent(in) :: z0fac, e0fac
+      real(kind=kind_phys), intent(in) :: h0facu, h0facs
       real(kind=kind_phys), dimension(im), intent(in)  :: zorl, u10m, v10m
-      real(kind=kind_phys), dimension(im), intent(in)  :: hflx, evap
-      real(kind=kind_phys), dimension(im), intent(out) :: hflxq, evapq
+      real(kind=kind_phys), dimension(im), intent(in)  :: hflx, evap, sigmaf
+      real(kind=kind_phys), dimension(im), intent(out) :: hflxq, evapq, zvfun
       real(kind=kind_phys), dimension(im), intent(out) :: hffac, hefac
 
       ! CCPP error handling variables
@@ -116,7 +117,7 @@
       integer,          intent(out) :: errflg
 
       ! Parameters for canopy heat storage parametrization
-      real (kind=kind_phys), parameter :: z0min=0.2, z0max=1.0
+      real (kind=kind_phys), parameter :: z0min=0.1, z0max=1.0
       real (kind=kind_phys), parameter :: u10min=2.5, u10max=7.5
 
       ! Local variables
@@ -286,19 +287,33 @@
         hffac(i) = 1.0
         hefac(i) = 1.0
       enddo
-      if (lheatstrg) then
-        do i=1,im
+      do i=1,im
+        if(islmsk(i) == 1) then
           tem = 0.01 * zorl(i)     ! change unit from cm to m
           tem1 = (tem - z0min) / (z0max - z0min)
-          hffac(i) = z0fac * min(max(tem1, 0.0), 1.0)
-          tem = sqrt(u10m(i)**2+v10m(i)**2)
-          tem1 = (tem - u10min) / (u10max - u10min)
-          tem2 = 1.0 - min(max(tem1, 0.0), 1.0)
-          hffac(i) = tem2 * hffac(i)
-          hefac(i) = 1. + e0fac * hffac(i)
-          hffac(i) = 1. + hffac(i)
-          hflxq(i) = hflx(i) / hffac(i)
-          evapq(i) = evap(i) / hefac(i)
+          tem1 = min(max(tem1, 0.0), 1.0)
+          tem2 = max(sigmaf(i), 0.1)
+!         tem2 = sigmaf(i)
+          zvfun(i) = sqrt(tem1 * tem2)
+        else
+          zvfun(i) = 0.
+        endif
+      enddo
+
+      if (lheatstrg) then
+        do i=1,im
+         if(islmsk(i) == 1) then
+          if(hflx(i) > 0.) then
+              hffac(i) = h0facu * zvfun(i)
+            else
+              hffac(i) = h0facs * zvfun(i)
+            endif
+            hffac(i) = 1. + hffac(i)
+            hflxq(i) = hflx(i) / hffac(i)
+            hefac(i) = 1. + 0.5 * hffac(i)
+            hffac(i) = 1. + hffac(i)
+            evapq(i) = evap(i) / hefac(i)
+          end if
         enddo
       endif
 

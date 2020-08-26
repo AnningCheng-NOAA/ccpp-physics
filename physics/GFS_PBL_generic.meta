@@ -315,18 +315,18 @@
   type = logical
   intent = in
   optional = F
-[z0fac]
-  standard_name = surface_roughness_fraction_factor
-  long_name = surface roughness fraction factor for canopy heat storage parameterization
+[h0facu]
+  standard_name = CHS_factor_sflx_for_unstable_sfc_layer
+  long_name = CHS factor for sensible heat flux in unstable surface layer
   units = none
   dimensions = ()
   type = real
   kind = kind_phys
   intent = in
   optional = F
-[e0fac]
-  standard_name = latent_heat_flux_fraction_factor_relative_to_sensible_heat_flux
-  long_name = latent heat flux fraction factor relative to sensible heat flux for canopy heat storage parameterization
+[h0facs]
+  standard_name = CHS_factor_sflx_for_sfc_layer
+  long_name = CHS factor for sensible heat flux in stable surface layer
   units = none
   dimensions = ()
   type = real
@@ -341,6 +341,15 @@
   type = real
   kind = kind_phys
   intent = in
+  optional = F
+[zvfun]
+  standard_name = canopy_heat_storage_parameter_1
+  long_name = lheatstorage a function of surface roughness & green vegetation fraction
+  units = none
+  dimensions = (horizontal_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
   optional = F
 [u10m]
   standard_name = x_wind_at_10m
@@ -413,6 +422,23 @@
   type = real
   kind = kind_phys
   intent = out
+  optional = F
+[sigmaf]
+  standard_name = bounded_vegetation_area_fraction
+  long_name = areal fractional cover of green vegetation bounded on the bottom
+  units = frac
+  dimensions = (horizontal_dimension)
+  type = real
+  kind = kind_phys
+  intent= in
+  optional = F
+[islmsk]
+  standard_name = sea_land_ice_mask
+  long_name = sea/land/ice mask (=0/1/2)
+  units = flag
+  dimensions = (horizontal_dimension)
+  type = integer
+  intent = in
   optional = F
 [errmsg]
   standard_name = ccpp_error_message

@@ -1,12 +1,12 @@
 !>\file mfpbltq.f
 !! This file contains the subroutine that calculates mass flux and
-!! updraft parcel properties for thermals driven by surface heating 
+!! updraft parcel properties for thermals driven by surface heating
 !! for use in the TKE-EDMF PBL scheme (updated version).
 
 !>\ingroup satmedmfvdifq
 !! This subroutine computes mass flux and updraft parcel properties for
-!! thermals driven by surface heating. 
-!!\section mfpbltq_gen GFS mfpblt General Algorithm 
+!! thermals driven by surface heating.
+!!\section mfpbltq_gen GFS mfpblt General Algorithm
 !> @{
       subroutine mfpbltq(im,ix,km,kmpbl,ntcw,ntrac1,delt,
      &   cnvflg,zl,zm,q1,t1,u1,v1,plyr,pix,thlx,thvx,
@@ -40,12 +40,13 @@
 c  local variables and arrays
 !
       integer   i, j, k, n, ndc
+      integer   kpblx(im), kpbly(im)
 !
       real(kind=kind_phys) dt2,     dz,      ce0,     cm,
      &                     factor,  gocp,
      &                     g,       b1,      f1,
      &                     bb1,     bb2,
-     &                     a1,      pgcon,
+     &                     alp,     vprtmax, a1,      pgcon,
      &                     qmin,    qlmin,   xmmx,    rbint,
      &                     tem,     tem1,    tem2,
      &                     ptem,    ptem1,   ptem2
@@ -54,7 +55,8 @@ c  local variables and arrays
      &                     tlu,     gamma,   qlu,
      &                     thup,    thvu,    dq
 !
-      real(kind=kind_phys) rbdn(im), rbup(im), xlamuem(im,km-1)
+      real(kind=kind_phys) rbdn(im), rbup(im), hpblx(im),
+     &                     xlamuem(im,km-1)
       real(kind=kind_phys) delz(im), xlamax(im)
 !
       real(kind=kind_phys) wu2(im,km), thlu(im,km),
@@ -71,7 +73,7 @@ c  local variables and arrays
       parameter(elocp=hvap/cp,el2orc=hvap*hvap/(rv*cp))
       parameter(ce0=0.4,cm=1.0)
       parameter(qmin=1.e-8,qlmin=1.e-12)
-      parameter(pgcon=0.55)
+      parameter(alp=1.5,vprtmax=3.0,pgcon=0.55)
       parameter(b1=0.5,f1=0.15)
 !
 !************************************************************************
@@ -95,17 +97,19 @@ c  local variables and arrays
         enddo
       enddo
 !
-!> - Compute thermal excess
+!  compute thermal excess
 !
       do i=1,im
         if(cnvflg(i)) then
-          thlu(i,1)= thlx(i,1) + vpert(i)
+          ptem = alp * vpert(i)
+          ptem = min(ptem, vprtmax)
+          thlu(i,1)= thlx(i,1) + ptem
           qtu(i,1) = qtx(i,1)
-          buo(i,1) = g * vpert(i) / thvx(i,1)
+          buo(i,1) = g * ptem / thvx(i,1)
         endif
       enddo
 !
-!> - Compute entrainment rate
+!  compute entrainment rate
 !
       do i=1,im
         if(cnvflg(i)) then
@@ -133,7 +137,7 @@ c  local variables and arrays
         enddo
       enddo
 !
-!> - Compute buoyancy for updraft air parcel
+!  compute buoyancy for updraft air parcel
 !
       do k = 2, kmpbl
         do i=1,im
@@ -169,8 +173,7 @@ c  local variables and arrays
         enddo
       enddo
 !
-!> - Compute updraft velocity square(wu2, eqn 13 in 
-!! Han et al.(2019) \cite Han_2019)
+!  compute updraft velocity square(wu2)
 !
 !     tem = 1.-2.*f1
 !     bb1 = 2. * b1 / tem
@@ -209,10 +212,12 @@ c  local variables and arrays
         enddo
       enddo
 !
-!> - Update pbl height as the height where updraft velocity vanishes
+!  update pbl height as the height where updraft velocity vanishes
 !
       do i=1,im
          flg(i)  = .true.
+         kpblx(i) = 1
+         kpbly(i) = kpbl(i)
          if(cnvflg(i)) then
            flg(i)  = .false.
            rbup(i) = wu2(i,1)
@@ -223,14 +228,14 @@ c  local variables and arrays
         if(.not.flg(i)) then
           rbdn(i) = rbup(i)
           rbup(i) = wu2(i,k)
-          kpbl(i)= k
+          kpblx(i)= k
           flg(i)  = rbup(i).le.0.
         endif
       enddo
       enddo
       do i = 1,im
         if(cnvflg(i)) then
-           k = kpbl(i)
+           k = kpblx(i)
            if(rbdn(i) <= 0.) then
               rbint = 0.
            elseif(rbup(i) >= 0.) then
@@ -238,11 +243,21 @@ c  local variables and arrays
            else
               rbint = rbdn(i)/(rbdn(i)-rbup(i))
            endif
-           hpbl(i) = zm(i,k-1) + rbint*(zm(i,k)-zm(i,k-1))
+           hpblx(i) = zm(i,k-1) + rbint*(zm(i,k)-zm(i,k-1))
+        endif
+      enddo
+!
+      do i = 1,im
+        if(cnvflg(i)) then
+          if(kpblx(i) < kpbl(i)) then
+            kpbl(i) = kpblx(i)
+            hpbl(i) = hpblx(i)
+          endif
+          if(kpbl(i) <= 1) cnvflg(i)=.false.
         endif
       enddo
 ! 
-!> - Update entrainment rate
+!  update entrainment rate
 !
       do i=1,im
         if(cnvflg(i)) then
@@ -255,7 +270,8 @@ c  local variables and arrays
 !
       do k = 1, kmpbl
         do i=1,im
-          if(cnvflg(i)) then
+          if(cnvflg(i) .and. kpblx(i) < kpbly(i)) then
+!         if(cnvflg(i)) then
             if(k < kpbl(i)) then
               ptem = 1./(zm(i,k)+delz(i))
               tem = max((hpbl(i)-zm(i,k)+delz(i)) ,delz(i))
@@ -270,7 +286,7 @@ c  local variables and arrays
         enddo
       enddo
 !
-!> - Compute entrainment rate averaged over the whole pbl
+!  compute entrainment rate averaged over the whole pbl
 !
       do i = 1, im
         xlamavg(i) = 0.
@@ -291,7 +307,7 @@ c  local variables and arrays
         endif
       enddo
 !
-!> - Updraft mass flux as a function of updraft velocity profile
+!  updraft mass flux as a function of updraft velocity profile
 !
       do k = 1, kmpbl
         do i = 1, im
@@ -301,8 +317,8 @@ c  local variables and arrays
         enddo
       enddo
 !
-!> - Compute updraft fraction as a function of mean entrainment rate
-!!(Grell and Freitas (2014) \cite grell_and_freitas_2014
+!--- compute updraft fraction as a function of mean entrainment rate
+!        (Grell & Freitas, 2014)
 !
       do i = 1, im
         if(cnvflg(i)) then
@@ -314,8 +330,7 @@ c  local variables and arrays
         endif
       enddo
 !
-!> - Compute scale-aware function based on 
-!! Arakawa and Wu (2013) \cite arakawa_and_wu_2013
+!--- compute scale-aware function based on Arakawa & Wu (2013)
 !
       do i = 1, im
         if(cnvflg(i)) then
@@ -328,7 +343,7 @@ c  local variables and arrays
         endif
       enddo
 !
-!> - Final scale-aware updraft mass flux
+!  final scale-aware updraft mass flux
 !
       do k = 1, kmpbl
         do i = 1, im
@@ -342,7 +357,7 @@ c  local variables and arrays
       enddo
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!> - Compute updraft property using updated entranment rate
+!  compute updraft property using updated entranment rate
 !
       do i=1,im
         if(cnvflg(i)) then
@@ -451,3 +466,4 @@ c  local variables and arrays
       return
       end
 !> @}
+

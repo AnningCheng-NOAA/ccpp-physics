@@ -284,6 +284,15 @@
   kind = kind_phys
   intent = in
   optional = F
+[zvfun]
+  standard_name = canopy_heat_storage_parameter_1
+  long_name = lheatstorage a function of surface roughness & green vegetation fraction
+  units = none
+  dimensions = (horizontal_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+  optional = F
 [psk]
   standard_name = dimensionless_exner_function_at_lowest_model_interface
   long_name = dimensionless Exner function at the surface interface

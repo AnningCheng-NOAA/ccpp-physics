@@ -20,14 +20,19 @@
     subroutine GFS_DCNV_generic_pre_run (im, levs, ldiag3d, do_cnvgwd, cplchm,       &
                                          gu0, gv0, gt0, gq0_water_vapor,             &
                                          save_u, save_v, save_t, save_qv, ca_deep,   &
+                                         deep_pblf, dtvdtp, Tbd, con_fvirt,          &
+                                         numtq, dtp, imp_physics,                    &
                                          dqdti, errmsg, errflg)
 
       use machine, only: kind_phys
+      use GFS_typedefs,          only: GFS_Tbd_type
 
       implicit none
 
-      integer, intent(in) :: im, levs
-      logical, intent(in) :: ldiag3d, do_cnvgwd, cplchm
+      integer, intent(in) :: im, levs, numtq, imp_physics
+      logical, intent(in) :: ldiag3d, do_cnvgwd, cplchm, deep_pblf
+      real (kind=kind_phys),  intent(in) :: con_fvirt, dtp
+      type(GFS_tbd_type),  intent(in)    :: Tbd
       real(kind=kind_phys), dimension(im,levs), intent(in)    :: gu0
       real(kind=kind_phys), dimension(im,levs), intent(in)    :: gv0
       real(kind=kind_phys), dimension(im,levs), intent(in)    :: gt0
@@ -35,8 +40,10 @@
       real(kind=kind_phys), dimension(im,levs), intent(inout) :: save_u
       real(kind=kind_phys), dimension(im,levs), intent(inout) :: save_v
       real(kind=kind_phys), dimension(im,levs), intent(inout) :: save_t
-      real(kind=kind_phys), dimension(im,levs), intent(inout) :: save_qv
+      real(kind=kind_phys), dimension(im,levs), intent(inout) :: save_qv, dtvdtp
       real(kind=kind_phys), dimension(im),      intent(in)    :: ca_deep
+      real (kind=kind_phys):: tem, tem1, tem2
+
       ! dqdti only allocated if cplchm is .true.
       real(kind=kind_phys), dimension(:,:),     intent(inout) :: dqdti
       character(len=*), intent(out) :: errmsg
@@ -75,6 +82,37 @@
 
       if (cplchm) then
         dqdti = zero
+      endif
+!
+!   save temperature and moisture fields at two time steps back & & previous time step in 'phy_f3d' array
+!   for Zhao/Carr/Sundqvist Microphysics scheme, they are saved in 'phy_f3d(:,:,1~4)'
+!   Calculate and the virtual temperature variable tendency for the pbl forcing
+!   in 'samfdeepcnv' & 'samfshalcnv' convection schemes.
+!
+      if (deep_pblf) then
+!
+        if (imp_physics == 99 .or. imp_physics == 98) then   ! zhao-carr microphysics
+          do k=1,levs/2
+            do i=1,im
+              tem = max(Tbd%phy_f3d(i,k,2), 1.e-8)
+              tem1 = Tbd%phy_f3d(i,k,1) * (1.0 + con_fvirt * tem)
+              tem = max(gq0_water_vapor(i,k), 1.e-8)
+              tem2 = gt0(i,k) * (1.0 + con_fvirt * tem)
+              dtvdtp(i,k) = (tem2 - tem1) / dtp
+            enddo
+          enddo
+        else
+          do k=1,levs/2
+            do i=1,im
+              tem = max(Tbd%phy_f3d(i,k,numtq+2), 1.e-8)
+              tem1 = Tbd%phy_f3d(i,k,numtq+1) * (1.0 + con_fvirt * tem)
+              tem = max(gq0_water_vapor(i,k), 1.e-8)
+              tem2 = gt0(i,k) * (1.0 + con_fvirt * tem)
+              dtvdtp(i,k) = (tem2 - tem1) / dtp
+            enddo
+          enddo
+        endif
+!
       endif
 
     end subroutine GFS_DCNV_generic_pre_run
