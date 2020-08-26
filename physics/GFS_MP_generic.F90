@@ -93,7 +93,7 @@
 
       implicit none
 
-      integer, intent(in) :: im, ix, levs, kdt, nrcm, ncld, nncl, ntcw, ntrac,
+      integer, intent(in) :: im, ix, levs, kdt, nrcm, ncld, nncl, ntcw, ntrac, numtq
       integer, intent(in) :: imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_mg, imp_physics_fer_hires
       logical, intent(in) :: cal_pre, lssav, ldiag3d, cplflx, cplchm, deep_pblf
       type(GFS_tbd_type),  intent(inout)    :: Tbd
