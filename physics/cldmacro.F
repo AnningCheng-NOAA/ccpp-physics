@@ -39,6 +39,7 @@
        public meltfrz_inst
        public fix_up_clouds_2M
        PUBLIC CLOUD_PTR_STUBS
+       PUBLIC hystpdf
 
 !! Some parameters set by PHYSPARAMS
 
