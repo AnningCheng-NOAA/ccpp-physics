@@ -186,7 +186,8 @@
      &                     xmb(im),     xmbmax(im), xpwav(im),
 !    &                     xpwev(im),   xlamx(im),  delebar(im,ntr),
      &                     xpwev(im),   delebar(im,ntr),
-     &                     delubar(im), delvbar(im)
+     &                     delubar(im), delvbar(im),
+     &                     qicns(im,km), qlcns(im,km)
       real(kind=kind_phys) aapbl(im), zikb(im), zmnbl(im)
 !
       real(kind=kind_phys) c0(im)
@@ -377,8 +378,10 @@ c
       if(mp_phys == mp_phys_mg) then
         do k = 1, km
           do i = 1, im
-            QLCN(i,k)      = qtr(i,k,2)
-            QICN(i,k)      = qtr(i,k,1)
+            QLCNS(i,k)      = qtr(i,k,2)
+            QICNS(i,k)      = qtr(i,k,1)
+            QLCN(i,k)      = 0.0
+            QICN(i,k)      = 0.0
             w_upi(i,k)     = 0.0
             cf_upi(i,k)    = 0.0
             CNV_MFD(i,k)   = 0.0
@@ -2918,8 +2921,8 @@ c
       if(mp_phys == mp_phys_mg) then
         do k=1,km
           do i=1,im
-            QLCN(i,k)     = qtr(i,k,2) - qlcn(i,k)
-            QICN(i,k)     = qtr(i,k,1) - qicn(i,k)
+            QLCN(i,k)     = qtr(i,k,2) - qlcns(i,k)
+            QICN(i,k)     = qtr(i,k,1) - qicns(i,k)
             cf_upi(i,k)   = cnvc(i,k)
             w_upi(i,k)    = ud_mf(i,k)*t1(i,k)*rd /
      &                     (dt2*max(sigmagfm(i),1.e-12)*prslp(i,k))
