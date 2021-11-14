@@ -22,7 +22,8 @@
       use h2ointerp, only : read_h2odata, setindxh2o, h2ointerpol
 
       use aerclm_def, only : aerin, aer_pres, ntrcaer, ntrcaerm, iamin, iamax, jamin, jamax
-      use aerinterp,  only : read_aerdata, setindxaer, aerinterpol, read_aerdataf
+      use aerinterp,  only : read_aerdata, setindxaer, aerinterpol, read_aerdataf,     &
+                             aerintpl_tl6, readaer_tl6
 
       use iccn_def,   only : ciplin, ccnin, ci_pres
       use iccninterp, only : read_cidata, setindxci, ciinterpol
@@ -67,7 +68,8 @@
 !>\section gen_GFS_phys_time_vary_init GFS_phys_time_vary_init General Algorithm
 !! @{
       subroutine GFS_phys_time_vary_init (                                                         &
-              me, master, ntoz, h2o_phys, iaerclm, iccn, iflip, im, nx, ny, idate, xlat_d, xlon_d, &
+              me, master, ntoz, h2o_phys, iaerclm, mr2tl6, tile_num,                               &
+              iccn, iflip, im, nx, ny, idate, xlat_d, xlon_d,                                      &
               jindx1_o3, jindx2_o3, ddy_o3, ozpl, jindx1_h, jindx2_h, ddy_h, h2opl,fhour,          &
               jindx1_aer, jindx2_aer, ddy_aer, iindx1_aer, iindx2_aer, ddx_aer, aer_nm,            &
               jindx1_ci, jindx2_ci, ddy_ci, iindx1_ci, iindx2_ci, ddx_ci, imap, jmap,              &
@@ -86,10 +88,11 @@
 
          ! Interface variables
          integer,              intent(in)    :: me, master, ntoz, iccn, iflip, im, nx, ny
-         logical,              intent(in)    :: h2o_phys, iaerclm, flag_restart
+         logical,              intent(in)    :: h2o_phys, iaerclm, mr2tl6, flag_restart
          integer,              intent(in)    :: idate(:)
          real(kind_phys),      intent(in)    :: fhour
          real(kind_phys),      intent(in)    :: xlat_d(:), xlon_d(:)
+         integer,              intent(in)    :: tile_num
 
          integer,              intent(inout) :: jindx1_o3(:), jindx2_o3(:), jindx1_h(:), jindx2_h(:)
          real(kind_phys),      intent(inout) :: ddy_o3(:),  ddy_h(:)
@@ -181,7 +184,7 @@
          integer              :: soiltyp, isnow, is, imn
          real(kind=kind_phys) :: masslai, masssai, snd
          real(kind=kind_phys) :: bexp, ddz, smcmax, smcwlt, dwsat, dksat, psisat
-
+         character(len=6)     :: tile_num_ch
          real(kind=kind_phys), dimension(:), allocatable :: dzsno
          real(kind=kind_phys), dimension(:), allocatable :: dzsnso
 
@@ -201,7 +204,7 @@
 !$OMP          shared (levozp,oz_coeff,oz_pres,ozpl)                                &
 !$OMP          shared (levh2o,h2o_coeff,h2o_pres,h2opl)                             &
 !$OMP          shared (iamin, iamax, jamin, jamax)                                  &
-!$OMP          shared (iaerclm,ntrcaer,aer_nm,iflip,iccn)                           &
+!$OMP          shared (iaerclm,mr2tl6, ntrcaer,aer_nm,iflip,iccn)                   &
 !$OMP          shared (jindx1_o3,jindx2_o3,ddy_o3,jindx1_h,jindx2_h,ddy_h)          &
 !$OMP          shared (jindx1_aer,jindx2_aer,ddy_aer,iindx1_aer,iindx2_aer,ddx_aer) &
 !$OMP          shared (jindx1_ci,jindx2_ci,ddy_ci,iindx1_ci,iindx2_ci,ddx_ci)       &
@@ -268,7 +271,7 @@
                ! If iaerclm is .true., then ntrcaer == ntrcaerm
                ntrcaer = size(aer_nm, dim=3)
                ! Read aerosol climatology
-               call read_aerdata (me,master,iflip,idate,errmsg,errflg)
+               if (.not. mr2tl6) call read_aerdata (me,master,iflip,idate,errmsg,errflg)
             endif
          else
             ! Update the value of ntrcaer in aerclm_def with the value defined
@@ -315,7 +318,7 @@
 
 !$OMP section
 !> - Call setindxaer() to initialize aerosols data
-         if (iaerclm) then
+         if (iaerclm .and. (.not. mr2tl6)) then
            call setindxaer (im, xlat_d, jindx1_aer,          &
                             jindx2_aer, ddy_aer, xlon_d,     &
                             iindx1_aer, iindx2_aer, ddx_aer, &
@@ -388,7 +391,18 @@
          if (errflg/=0) return
 
          if (iaerclm) then
-           call read_aerdataf (me, master, iflip, idate, fhour, errmsg, errflg)
+           if(mr2tl6) then
+             tile_num_ch = "      "
+             if (tile_num < 10) then
+               write(tile_num_ch, "(a4,i1)") "tile", tile_num
+             else
+               write(tile_num_ch, "(a4,i2)") "tile", tile_num
+             endif
+             call readaer_tl6 (me, master, iflip, idate, FHOUR, nx, ny,            &
+                               tile_num_ch, errmsg, errflg)
+           else
+             call read_aerdataf (me, master, iflip, idate, fhour, errmsg, errflg)
+           end if
            if (errflg/=0) return
          end if
 
@@ -714,7 +728,7 @@
 !! @{
       subroutine GFS_phys_time_vary_timestep_init (                                                 &
             me, master, cnx, cny, isc, jsc, nrcm, im, levs, kdt, idate, nsswr, fhswr, lsswr, fhour, &
-            imfdeepcnv, cal_pre, random_clds, nscyc, ntoz, h2o_phys, iaerclm, iccn, clstp,          &
+            imfdeepcnv, cal_pre, random_clds, nscyc, ntoz, h2o_phys, iaerclm, mr2tl6, iccn, clstp,  &
             jindx1_o3, jindx2_o3, ddy_o3, ozpl, jindx1_h, jindx2_h, ddy_h, h2opl, iflip,            &
             jindx1_aer, jindx2_aer, ddy_aer, iindx1_aer, iindx2_aer, ddx_aer, aer_nm,               &
             jindx1_ci, jindx2_ci, ddy_ci, iindx1_ci, iindx2_ci, ddx_ci, in_nm, ccn_nm,              &
@@ -733,7 +747,7 @@
                                                 nsswr, imfdeepcnv, iccn, nscyc, ntoz, iflip
          integer,              intent(in)    :: idate(:)
          real(kind_phys),      intent(in)    :: fhswr, fhour
-         logical,              intent(in)    :: lsswr, cal_pre, random_clds, h2o_phys, iaerclm
+         logical,              intent(in)    :: lsswr, cal_pre, random_clds, h2o_phys, iaerclm, mr2tl6
          real(kind_phys),      intent(out)   :: clstp
          integer,              intent(in)    :: jindx1_o3(:), jindx2_o3(:), jindx1_h(:), jindx2_h(:)
          real(kind_phys),      intent(in)    :: ddy_o3(:),  ddy_h(:)
@@ -774,10 +788,12 @@
          integer,              intent(out)   :: errflg
 
          ! Local variables
-         integer :: i, j, k, iseed, iskip, ix
+         integer :: i, j, k, iseed, iskip, ix, npts
          real(kind=kind_phys) :: wrk(1)
          real(kind=kind_phys) :: rannie(cny)
          real(kind=kind_phys) :: rndval(cnx*cny*nrcm)
+         integer              :: i_index(nx*ny), j_index(nx*ny)
+         character(len=6)     :: tile_num_ch
 
          ! Initialize CCPP error handling variables
          errmsg = ''
@@ -886,14 +902,31 @@
 
 !> - Call aerinterpol() to make aerosol interpolation
          if (iaerclm) then
-           ! aerinterpol is using threading inside, don't
-           ! move into OpenMP parallel section above
-           call aerinterpol (me, master, nthrds, im, idate, &
-                             fhour, iflip, jindx1_aer, jindx2_aer, &
-                             ddy_aer, iindx1_aer,           &
-                             iindx2_aer, ddx_aer,           &
-                             levs, prsl, aer_nm)
-         endif
+          if(mr2tl6) then
+             tile_num_ch = "      "
+             if (tile_num < 10) then
+               write(tile_num_ch, "(a4,i1)") "tile", tile_num
+             else
+               write(tile_num_ch, "(a4,i2)") "tile", tile_num
+             endif
+             npts  = nx*ny
+             do ix=1,npts
+               i_index(ix) = imap(ix) + isc - 1
+               j_index(ix) = jmap(ix) + jsc - 1
+             end do
+             call aerintpl_tl6 (me, master, nthrds, npts, idate,        &
+                              fhour, nx, ny, iflip, tile_num_ch, i_index, j_index,   &
+                              levs, prsl, aer_nm)
+          else
+             ! aerinterpol is using threading inside, don't
+             ! move into OpenMP parallel section above
+            call aerinterpol (me, master, nthrds, im, idate, &
+                              fhour, iflip, jindx1_aer, jindx2_aer, &
+                              ddy_aer, iindx1_aer,           &
+                              iindx2_aer, ddx_aer,           &
+                              levs, prsl, aer_nm)
+          endif
+        endif
 
 !> - Call gcycle() to repopulate specific time-varying surface properties for AMIP/forecast runs
          if (nscyc >  0) then
