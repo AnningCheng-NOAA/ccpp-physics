@@ -23,7 +23,7 @@
 
       use aerclm_def, only : aerin, aer_pres, ntrcaer, ntrcaerm, iamin, iamax, jamin, jamax
       use aerinterp,  only : read_aerdata, setindxaer, aerinterpol, read_aerdataf,     &
-                             aerintpl_tl6, readaer_tl6
+                             aerintpl_TL, readaer_TL
 
       use iccn_def,   only : ciplin, ccnin, ci_pres
       use iccninterp, only : read_cidata, setindxci, ciinterpol
@@ -68,7 +68,7 @@
 !>\section gen_GFS_phys_time_vary_init GFS_phys_time_vary_init General Algorithm
 !! @{
       subroutine GFS_phys_time_vary_init (                                                         &
-              me, master, ntoz, h2o_phys, iaerclm, mr2tl6, tile_num,                               &
+              me, master, ntoz, h2o_phys, iaerclm, mr2tl6, tile_num, isc, jsc,                     &
               iccn, iflip, im, nx, ny, idate, xlat_d, xlon_d,                                      &
               jindx1_o3, jindx2_o3, ddy_o3, ozpl, jindx1_h, jindx2_h, ddy_h, h2opl,fhour,          &
               jindx1_aer, jindx2_aer, ddy_aer, iindx1_aer, iindx2_aer, ddx_aer, aer_nm,            &
@@ -87,7 +87,7 @@
          implicit none
 
          ! Interface variables
-         integer,              intent(in)    :: me, master, ntoz, iccn, iflip, im, nx, ny
+         integer,              intent(in)    :: me, master, ntoz, iccn, iflip, im, nx, ny, isc, jsc
          logical,              intent(in)    :: h2o_phys, iaerclm, mr2tl6, flag_restart
          integer,              intent(in)    :: idate(:)
          real(kind_phys),      intent(in)    :: fhour
@@ -175,9 +175,10 @@
          integer,              intent(in)    :: nthrds
          character(len=*),     intent(out)   :: errmsg
          integer,              intent(out)   :: errflg
+         integer              :: i_index(nx*ny), j_index(nx*ny)
 
          ! Local variables
-         integer :: i, j, ix, vegtyp
+         integer :: i, j, ix, vegtyp, npts
          real(kind_phys) :: rsnow
 
          !--- Noah MP
@@ -191,8 +192,8 @@
          ! Initialize CCPP error handling variables
          errmsg = ''
          errflg = 0
-
          if (is_initialized) return
+         npts = nx*ny
          iamin=999
          iamax=-999
          jamin=999
@@ -398,7 +399,11 @@
              else
                write(tile_num_ch, "(a4,i2)") "tile", tile_num
              endif
-             call readaer_tl6 (me, master, iflip, idate, FHOUR, nx, ny,            &
+             do ix=1,npts
+               i_index(ix) = imap(ix) + isc - 1
+               j_index(ix) = jmap(ix) + jsc - 1
+             end do
+             call readaer_TL (me, master, iflip, idate, FHOUR, npts, i_index, j_index,          &
                                tile_num_ch, errmsg, errflg)
            else
              call read_aerdataf (me, master, iflip, idate, fhour, errmsg, errflg)
@@ -798,6 +803,7 @@
          ! Initialize CCPP error handling variables
          errmsg = ''
          errflg = 0
+         npts  = nx*ny
 
          ! Check initialization status
          if (.not.is_initialized) then
@@ -909,14 +915,12 @@
              else
                write(tile_num_ch, "(a4,i2)") "tile", tile_num
              endif
-             npts  = nx*ny
              do ix=1,npts
                i_index(ix) = imap(ix) + isc - 1
                j_index(ix) = jmap(ix) + jsc - 1
              end do
-             call aerintpl_tl6 (me, master, nthrds, npts, idate,        &
-                              fhour, nx, ny, iflip, tile_num_ch, i_index, j_index,   &
-                              levs, prsl, aer_nm)
+             call aerintpl_TL (me, master, nthrds, npts,  i_index, j_index,idate,        &
+                              fhour, iflip, tile_num_ch, levs, prsl, aer_nm)
           else
              ! aerinterpol is using threading inside, don't
              ! move into OpenMP parallel section above
