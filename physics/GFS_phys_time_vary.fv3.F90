@@ -402,7 +402,9 @@
              do ix=1,npts
                i_index(ix) = imap(ix) + isc - 1
                j_index(ix) = jmap(ix) + jsc - 1
+            write(*,*)"AAAA4",i_index(ix),j_index(ix),ix
              end do
+            write(*,*)"AAAA3",npts, im
              call readaer_TL (me, master, iflip, idate, FHOUR, npts, i_index, j_index,          &
                                tile_num_ch, errmsg, errflg)
            else
@@ -919,6 +921,7 @@
                i_index(ix) = imap(ix) + isc - 1
                j_index(ix) = jmap(ix) + jsc - 1
              end do
+            write(*,*)"AAAA2",npts, im
              call aerintpl_TL (me, master, nthrds, npts,  i_index, j_index,idate,        &
                               fhour, iflip, tile_num_ch, levs, prsl, aer_nm)
           else

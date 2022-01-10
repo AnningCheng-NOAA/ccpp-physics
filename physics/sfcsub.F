@@ -8186,6 +8186,7 @@ cjfe
       if (error /= nf90_noerr) call netcdf_err(error)
       error=nf90_inquire_dimension(ncid,id_dim,len=ny)
       if (error /= nf90_noerr) call netcdf_err(error)
+      write(*,*)"AAAA6",nx,ny,npts
 
       error=nf90_inq_dimid(ncid, 'time', id_dim)
       if (error /= nf90_noerr) call netcdf_err(error)

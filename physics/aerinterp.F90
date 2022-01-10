@@ -710,6 +710,7 @@ contains
 
         write(mn,'(i2.2)') nf 
         fname=trim("aeroclim."//trim(tile_num_ch)//"m"//mn//".nc")
+        write(*,*)"AAAAA1",fname
         error = nf90_open(fname , nf90_NOWRITE, ncid)
         if (error /= nf90_noerr) call netcdf_err(error)
 
